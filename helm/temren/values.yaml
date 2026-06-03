@@ -1,0 +1,81 @@
+# API replica count.
+#
+# WebSocket NOTE: the in-process Hub is single-pod by default. To run
+# replicaCount > 1, set TEMREN_WS_REDIS=<redis addr> in api.env so each pod
+# bridges broadcasts via Redis pub/sub. Without that env var, clients
+# connected to pod-B will not see real-time scan progress events emitted
+# by pod-A (scans still complete; only the live UI feed degrades to
+# best-effort polling).
+replicaCount: 1
+
+image:
+  repository: ghcr.io/nickzsche/TemrenSec
+  pullPolicy: IfNotPresent
+
+api:
+  imageSuffix: api
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: false
+    className: nginx
+    host: api.temren.sh
+    tls: true
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+worker:
+  imageSuffix: worker
+  replicaCount: 3
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  persistence:
+    enabled: true
+    size: 1Gi
+
+postgresql:
+  enabled: true
+  auth:
+    username: temren
+    password: temren
+    database: temren
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+config:
+  environment: development
+  frontendUrl: http://localhost:3000
+  jwtSecret: ""
+  jwtExpiry: 24h
+  scanTimeout: 30
+  workerConcurrency: 5
+
+serviceAccount:
+  create: true
+  name: temren

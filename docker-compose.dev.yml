@@ -1,0 +1,75 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: temren
+      POSTGRES_PASSWORD: temren
+      POSTGRES_DB: temren
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temren"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: temren-api
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://temren:temren@postgres:5432/temren?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-do-not-use-in-production-123!A
+      ENVIRONMENT: development
+      FRONTEND_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/app/migrations
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: temren-worker
+    environment:
+      DATABASE_URL: postgres://temren:temren@postgres:5432/temren?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-do-not-use-in-production-123!A
+      WORKER_CONCURRENCY: "5"
+      SCAN_TIMEOUT: "30"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/app/migrations
+
+volumes:
+  postgres_data:
+  redis_data:

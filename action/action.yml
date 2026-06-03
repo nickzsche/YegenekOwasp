@@ -1,0 +1,51 @@
+name: 'Temren OWASP Security Scan'
+description: 'Scan your web application for OWASP Top 10 vulnerabilities'
+branding:
+  icon: 'shield'
+  color: 'blue'
+inputs:
+  target:
+    description: 'Target URL to scan'
+    required: true
+  depth:
+    description: 'Crawl depth'
+    required: false
+    default: '2'
+  format:
+    description: 'Output format (text, json, sarif)'
+    required: false
+    default: 'sarif'
+  output:
+    description: 'Output file path'
+    required: false
+    default: 'temren-results.sarif'
+  timeout:
+    description: 'Scan timeout in seconds'
+    required: false
+    default: '300'
+  rate:
+    description: 'Requests per second'
+    required: false
+    default: '10'
+  max_pages:
+    description: 'Maximum pages to crawl'
+    required: false
+    default: '50'
+  auth_token:
+    description: 'Bearer token for authenticated scanning'
+    required: false
+  auth_cookie:
+    description: 'Cookie for authenticated scanning (name=value)'
+    required: false
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.target }}
+    - ${{ inputs.depth }}
+    - ${{ inputs.format }}
+    - ${{ inputs.output }}
+    - ${{ inputs.timeout }}
+    - ${{ inputs.rate }}
+    - ${{ inputs.max_pages }}
+    - ${{ inputs.auth_token }}

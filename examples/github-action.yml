@@ -1,0 +1,39 @@
+# Drop this in .github/workflows/temren.yml to run Temren on every PR.
+name: Temren Security Scan
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * *"
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  temren:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Temren scanner
+        uses: nickzsche/TemrenSec@v1
+        with:
+          target: ${{ secrets.STAGING_URL }}
+          format: sarif
+          output: temren.sarif
+          fail-on: HIGH
+
+      - name: Upload SARIF to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: temren.sarif
+          category: temren
+
+      - name: Apply policy
+        run: |
+          temren policy --policy examples/policy.yaml --input findings.json --tags prod
+        continue-on-error: false

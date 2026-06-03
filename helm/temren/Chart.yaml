@@ -1,0 +1,13 @@
+apiVersion: v2
+name: temren
+description: TemrenSec Security Scanner
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - security
+  - owasp
+  - scanner
+maintainers:
+  - name: NICKZSCHE
+    url: https://github.com/nickzsche

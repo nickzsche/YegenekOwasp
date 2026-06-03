@@ -1,0 +1,145 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "temren.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  PORT: "8080"
+  ENVIRONMENT: {{ .Values.config.environment | quote }}
+  FRONTEND_URL: {{ .Values.config.frontendUrl | quote }}
+  JWT_SECRET: {{ .Values.config.jwtSecret | quote }}
+  JWT_EXPIRY: {{ .Values.config.jwtExpiry | quote }}
+  SCAN_TIMEOUT: {{ .Values.config.scanTimeout | quote }}
+  WORKER_CONCURRENCY: {{ .Values.config.workerConcurrency | quote }}
+{{- if .Values.config.databaseUrl }}
+  DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
+{{- end }}
+{{- if .Values.config.redisUrl }}
+  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+{{- end }}
+---
+{{- if .Values.config.databaseUrl }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "temren.fullname" . }}-db
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+stringData:
+  DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
+  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "temren.fullname" . }}-migrations
+  namespace: {{ .Release.Namespace }}
+data:
+{{ (.Files.Glob "migrations/*.sql").AsConfig | indent 2 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "temren.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "temren.fullname" . }}-api
+  template:
+    metadata:
+      labels:
+        app: {{ include "temren.fullname" . }}-api
+    spec:
+      containers:
+        - name: api
+          image: {{ .Values.image.repository }}-api:{{ .Values.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "temren.fullname" . }}-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: migrations
+              mountPath: /app/migrations
+      volumes:
+        - name: migrations
+          configMap:
+            name: {{ include "temren.fullname" . }}-migrations
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "temren.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "temren.fullname" . }}-worker
+  template:
+    metadata:
+      labels:
+        app: {{ include "temren.fullname" . }}-worker
+    spec:
+      containers:
+        - name: worker
+          image: {{ .Values.image.repository }}-worker:{{ .Values.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "temren.fullname" . }}-config
+          livenessProbe:
+            exec:
+              command:
+                - pgrep
+                - temren-worker
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - pgrep
+                - temren-worker
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: migrations
+              mountPath: /app/migrations
+      volumes:
+        - name: migrations
+          configMap:
+            name: {{ include "temren.fullname" . }}-migrations
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "temren.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: {{ .Values.api.service.type }}
+  ports:
+    - port: {{ .Values.api.service.port }}
+      targetPort: 8080
+  selector:
+    app: {{ include "temren.fullname" . }}-api
